@@ -5,42 +5,218 @@ from datetime import datetime
 st.set_page_config(page_title="HemePath Reporter Pro", layout="wide")
 
 # ==========================================
-# 0. SAFETY INITIALIZATION & DEFAULTS
+# 0. STATE MANAGEMENT & TEXT GENERATION
 # ==========================================
-if 'saved_reports' not in st.session_state:
-    st.session_state['saved_reports'] = ""
 
-# Set default values for all report variables
-rbc_morph = []
-plt_morph = []
-neut_morph = []
-pb_blast_pct = 0
-pb_blast_desc = []
-pb_auer = "No Auer rods seen"
-asp_status = "Adequate quality for interpretation"
-asp_reasons = []
-me_ratio = "2:1"
-blast_pct = 1
-blast_desc = []
-auer_rods = "No Auer rods seen"
-ery_maturation = "shows full spectrum maturation with no dysplasia"
-ery_dysplasia = []
-gran_maturation = "shows full spectrum maturation with no dysplasia"
-gran_dysplasia = []
-meg_number = "Normal"
-meg_morph = []
-iron_stores = "Normal"
-ring_sideroblasts = "No ring sideroblasts seen"
-bx_quality = "adequate quality for interpretation"
-cellularity = 40
-age = 60 # Default age needed for cellularity calculation
-cell_status = "normocellular" # Default for initialization
-streaming_status = "No obvious streaming to suggest fibrosis is present" 
-erythroid_island_status = "Erythroid islands are present in expected numbers"
-arch_features = []
-meg_dist = "Randomly distributed"
-ihc_report_text = ""
-ihc_markers_selected = []
+# Initialize session state for inputs if they don't exist
+def init_state():
+    defaults = {
+        # PB Inputs
+        'rbc_morph': ["unremarkable morphology"],
+        'plt_morph': ["small and well granulated"],
+        'neut_morph': ["normal morphology with appropriate granulation and segmentation"],
+        'lymph_morph': ["appear small and mature"], # NEW
+        'pb_blast_pct': 0,
+        'pb_blast_desc': [],
+        'pb_auer': "No Auer rods seen",
+        
+        # Aspirate Inputs
+        'asp_status': "Adequate quality for interpretation",
+        'asp_reasons': [],
+        'me_ratio': "2:1",
+        'bm_blast_pct': 1,
+        'bm_blast_desc': [],
+        'bm_auer': "No Auer rods seen",
+        'ery_maturation': "shows full spectrum maturation with no dysplasia",
+        'ery_dysplasia': [],
+        'gran_maturation': "shows full spectrum maturation with no dysplasia",
+        'gran_dysplasia': [],
+        'meg_number': "Normal",
+        'meg_morph': ["unremarkable with no dysplastic features"],
+        'asp_plasma_morph': [], # NEW
+        'asp_mast_cells': "No increase in mast cells", # NEW
+        'iron_stores': "Normal",
+        'ring_sideroblasts': "No ring sideroblasts seen",
+        
+        # Biopsy Inputs
+        'bx_quality': "adequate quality for interpretation",
+        'cellularity': 40,
+        'streaming_status': "No obvious streaming to suggest fibrosis is present",
+        'erythroid_island_status': "Erythroid islands are present in expected numbers",
+        'bx_granulocytes': "Granulocytes are well represented and show full spectrum maturation", # NEW
+        'arch_features': ["Bone marrow architecture is preserved and orderly", "Trilineage hematopoiesis present", "No blast clusters are identified", "No lymphoid aggregates are seen", "No non-hematopoietic elements present"],
+        'meg_dist': "Randomly distributed",
+        
+        # Report Drafts
+        'pb_report_draft': "",
+        'asp_report_draft': "",
+        'bx_report_draft': "",
+        'ihc_report_draft': "",
+        'saved_reports': ""
+    }
+
+    for key, value in defaults.items():
+        if key not in st.session_state:
+            st.session_state[key] = value
+
+    # Run initial text generation if drafts are empty
+    if not st.session_state['pb_report_draft']:
+        update_pb_text()
+    if not st.session_state['asp_report_draft']:
+        update_asp_text()
+    if not st.session_state['bx_report_draft']:
+        update_bx_text()
+
+# --- TEXT GENERATION FUNCTIONS (CALLBACKS) ---
+
+def update_pb_text():
+    # RBC Logic
+    rbc_list = st.session_state.rbc_morph
+    if "unremarkable morphology" in rbc_list or not rbc_list:
+        rbc_str = "Red blood cells show unremarkable morphology."
+    elif "non-specific morphology" in rbc_list:
+        rbc_str = "Red blood cells show non-specific morphology."
+    else:
+        rbc_str = f"Red blood cells show {', '.join(rbc_list)}."
+    
+    # Neutrophil Logic
+    neut_list = st.session_state.neut_morph
+    if "normal morphology with appropriate granulation and segmentation" in neut_list or not neut_list:
+        neut_str = "Neutrophils show normal morphology with appropriate granulation and segmentation."
+    else:
+        neut_str = f"Neutrophils show {', '.join(neut_list)}."
+
+    # Lymphocyte Logic (NEW)
+    lymph_list = st.session_state.lymph_morph
+    if "appear small and mature" in lymph_list or not lymph_list:
+        lymph_str = "Lymphocytes appear small and mature."
+    else:
+        # If multiple selections, join them.
+        lymph_str = f"Lymphocytes {', '.join(lymph_list)}."
+
+    # Platelet Logic
+    plt_list = st.session_state.plt_morph
+    if "small and well granulated" in plt_list or not plt_list:
+        plt_str = "Platelets are small and well granulated."
+    else:
+        plt_str = f"Platelets are {', '.join(plt_list)}."
+
+    # Blast Logic
+    pct = st.session_state.pb_blast_pct
+    desc = st.session_state.pb_blast_desc
+    auer = st.session_state.pb_auer
+    
+    if pct == 0:
+        blast_str = "No blasts are identified."
+    else:
+        desc_text = f" exhibiting {', '.join(desc)}" if desc else ""
+        auer_text = f" {auer}." if auer == "Auer rods present" else ""
+        blast_str = f"Blasts account for {pct}% of leukocytes{desc_text}.{auer_text}"
+
+    # Combine into one paragraph
+    st.session_state['pb_report_draft'] = f"{rbc_str} {neut_str} {lymph_str} {plt_str} {blast_str}"
+
+def update_asp_text():
+    # Quality
+    qual = st.session_state.asp_status
+    reasons = st.session_state.asp_reasons
+    qual_str = f"{qual}"
+    if reasons:
+        qual_str += f" due to {', '.join(reasons)}"
+    
+    # Blasts
+    pct = st.session_state.bm_blast_pct
+    desc = st.session_state.bm_blast_desc
+    auer = st.session_state.bm_auer
+    
+    blast_str = f"Blasts account for {pct}% of the differential count"
+    if pct > 0:
+        desc_text = f", exhibiting {', '.join(desc)}" if desc else ""
+        auer_text = f". {auer}." if auer == "Auer rods identified" else "."
+        blast_str += f"{desc_text}{auer_text}"
+    else:
+        blast_str = ". No blasts are identified."
+
+    # Erythroid
+    ery_mat = st.session_state.ery_maturation
+    ery_dys = st.session_state.ery_dysplasia
+    ery_str = f"Erythropoiesis {ery_mat}"
+    if ery_dys:
+        ery_str += f" with dysplastic features including {', '.join(ery_dys)}."
+    else:
+        ery_str += "."
+
+    # Granulocytic
+    gran_mat = st.session_state.gran_maturation
+    gran_dys = st.session_state.gran_dysplasia
+    gran_str = f"Granulopoiesis {gran_mat}"
+    if gran_dys:
+        gran_str += f" with dysplastic features including {', '.join(gran_dys)}."
+    else:
+        gran_str += "."
+
+    # Megs
+    meg_num = st.session_state.meg_number
+    meg_morph_list = st.session_state.meg_morph
+    
+    if "unremarkable with no dysplastic features" in meg_morph_list:
+        meg_morph_str = "have unremarkable morphology"
+    else:
+        meg_morph_str = f"display {', '.join(meg_morph_list)}"
+        
+    meg_str = f"Megakaryocytes are {meg_num.lower()} and {meg_morph_str}."
+
+    # Plasma Cells (NEW)
+    plasma_list = st.session_state.asp_plasma_morph
+    if plasma_list:
+        plasma_str = f"Plasma cells are identified showing {', '.join(plasma_list)}."
+    else:
+        plasma_str = "Plasma cells are unremarkable."
+
+    # Mast Cells (NEW)
+    mast_str = f"{st.session_state.asp_mast_cells}."
+
+    # Iron
+    iron = st.session_state.iron_stores
+    ring = st.session_state.ring_sideroblasts
+    iron_str = f"Iron staining shows {iron.lower()} iron stores. {ring}."
+
+    # Combine
+    text = f"The bone marrow aspirate is of {qual_str}. The myeloid-to-erythroid (M:E) ratio is {st.session_state.me_ratio}. {blast_str} {ery_str} {gran_str} {meg_str} {plasma_str} {mast_str} {iron_str}"
+    st.session_state['asp_report_draft'] = text
+
+def update_bx_text():
+    # Cellularity
+    cell = st.session_state.cellularity
+    age_val = st.session_state.age_input if 'age_input' in st.session_state else 60
+    
+    expected = 100 - age_val
+    if cell > (expected + 15):
+        c_status = "hypercellular"
+    elif cell < (expected - 15):
+        c_status = "hypocellular"
+    else:
+        c_status = "normocellular"
+    
+    cell_str = f"The bone marrow biopsy is of {st.session_state.bx_quality}. The cellularity is approximately {cell}%, which is {c_status} for age."
+
+    # Architecture
+    arch_list = st.session_state.arch_features
+    arch_str = f"{'. '.join(arch_list)}." if arch_list else "Bone marrow architecture is preserved."
+    
+    # Granulocytes (NEW)
+    gran_str = f"{st.session_state.bx_granulocytes}."
+
+    # Specifics
+    ery_island = st.session_state.erythroid_island_status
+    streaming = st.session_state.streaming_status
+    meg_d = st.session_state.meg_dist
+    
+    text = f"{cell_str} {arch_str} {gran_str} {ery_island}. {streaming}. Megakaryocytes are {meg_d.lower()}. Trabecular bone is unremarkable."
+    st.session_state['bx_report_draft'] = text
+
+# Initialize State
+init_state()
 
 
 # ==========================================
@@ -77,8 +253,6 @@ USER_NOTES_DATABASE = {
 # ==========================================
 # 2. HEME CLASSIFICATION REFERENCE DATABASES
 # ==========================================
-
-# --- ICC 2022 DATA (UPDATED as requested, comprehensive) ---
 ICC_DATA = {
     "Acute Myeloid Leukemia (AML)": {
         "AML with Recurrent Genetic Abnormalities": {
@@ -219,8 +393,6 @@ ICC_DATA = {
     }
 }
 
-
-# --- WHO 5th EDITION DATA (NEW, EXPANDED, AND COMPREHENSIVE - Unchanged from previous step) ---
 WHO5_DATA = {
     "WHO5 AML broad categories": {
         "AML with defining genetic abnormalities": "6 fusion proteins, 3 rearrangements and 2 mutations",
@@ -322,12 +494,12 @@ st.markdown("---")
 with st.sidebar:
     st.header("Patient & CBC Data")
     accession = st.text_input("Accession Number", key="accession_input")
-    age = st.number_input("Patient Age", min_value=0, max_value=120, value=60, key="age_input")
+    age = st.number_input("Patient Age", min_value=0, max_value=120, value=60, key="age_input", on_change=update_bx_text)
     
     st.subheader("Peripheral Blood")
-    wbc = st.text_input("WBC (x10^9/L)", "Normal")
-    hb = st.text_input("Hemoglobin (g/L)", "Normal")
-    plt = st.text_input("Platelets (x10^9/L)", "Normal")
+    wbc = st.text_input("WBC (x10^9/L)", "Normal", key="wbc")
+    hb = st.text_input("Hemoglobin (g/L)", "Normal", key="hb")
+    plt = st.text_input("Platelets (x10^9/L)", "Normal", key="plt")
     
     cbc_summary = f"CBC shows WBC {wbc}, Hb {hb}, and Platelets {plt}."
     if st.checkbox("Pancytopenia present?"):
@@ -346,7 +518,6 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
 
 # ==========================================
 # TAB 1: PERIPHERAL BLOOD
-# (No changes here, keeping code concise for display)
 # ==========================================
 with tab1:
     st.header("Peripheral Blood Morphology")
@@ -355,49 +526,63 @@ with tab1:
     
     with col_pb1:
         st.subheader("Red Blood Cells")
-        rbc_morph = st.multiselect("RBC Morphology", 
+        st.multiselect("RBC Morphology", 
             ["unremarkable morphology", "non-specific morphology", 
              "normochromic", "normocytic", 
              "dimorphic population", "mild anisopoikilocytosis", "moderate anisopoikilocytosis", 
              "severe anisopoikilocytosis", "hypochromia", "polychromasia", "spherocytes", 
              "schistocytes", "dacrocytes (teardrops)", "elliptocytes", "target cells", 
-             "basophilic stippling", "Rouleaux formation"],
-            default=["unremarkable morphology"])
+             "basophilic stippling", "Howell-Jolly bodies", "Rouleaux formation"],
+            key='rbc_morph', on_change=update_pb_text)
         
         st.divider()
         
         st.subheader("Platelets")
-        plt_morph = st.multiselect("Platelet Morphology", 
+        st.multiselect("Platelet Morphology", 
             ["small and well granulated", "unremarkable", "variable in size with occasional large forms",
              "hypogranular", "large/giant forms present", "platelet clumps/aggregates seen"],
-            default=["small and well granulated"])
+            key='plt_morph', on_change=update_pb_text)
 
     with col_pb2:
         st.subheader("Neutrophils")
-        neut_morph = st.multiselect("Neutrophil Morphology", 
+        st.multiselect("Neutrophil Morphology", 
             ["normal morphology with appropriate granulation and segmentation", "unremarkable",
              "left-shifted", "toxic granulation", "hypogranular", 
              "Pseudo-Pelger-Huet anomalies", "abnormal chromatin clumping", "hypersegmented"],
-            default=["normal morphology with appropriate granulation and segmentation"])
+            key='neut_morph', on_change=update_pb_text)
              
+        st.divider()
+
+        st.subheader("Lymphocytes") # NEW
+        st.multiselect("Lymphocyte Morphology", 
+            ["appear small and mature", "appear monomorphic", 
+             "CLL-like cells", "cells with prominent nucleoli (prolymphocytes)",
+             "cells with hairy-like projections with monocytoid morphology",
+             "large granular lymphocytes", "reactive lymphocytes"],
+            key='lymph_morph', on_change=update_pb_text)
+
         st.divider()
              
         st.subheader("Blasts (PB)")
-        pb_blast_pct = st.number_input("PB Blast % (Enter 0 for 'No blasts identified')", 0, 100, 0, key="pb_blast_pct_input")
+        st.number_input("PB Blast % (Enter 0 for 'No blasts identified')", 0, 100, key="pb_blast_pct", on_change=update_pb_text)
         
-        pb_blast_desc = st.multiselect("PB Blast Description (Select features if >0%)", 
+        st.multiselect("PB Blast Description (Select features if >0%)", 
             ["high N:C ratio", "dispersed chromatin", "prominent nucleoli", 
-             "agranular cytoplasm", "monoblastic features", "circulating micromegakaryocytes"])
+             "agranular cytoplasm", "monoblastic features", "circulating micromegakaryocytes"],
+            key="pb_blast_desc", on_change=update_pb_text)
         
-        if pb_blast_pct > 0:
-            pb_auer = st.radio("Auer Rods (PB)", ["No Auer rods seen", "Auer rods present"], key="pb_auer_input")
+        if st.session_state.pb_blast_pct > 0:
+            st.radio("Auer Rods (PB)", ["No Auer rods seen", "Auer rods present"], key="pb_auer", on_change=update_pb_text)
         else:
-            pb_auer = "No Auer rods seen"
             st.caption("Auer Rod status is included only if Blasts % > 0.")
+
+    st.divider()
+    st.subheader("📝 PB Report Draft (Editable)")
+    st.caption("This text updates automatically as you select options above. You can also edit it manually.")
+    st.text_area("Peripheral Blood Section", key="pb_report_draft", height=150)
 
 # ==========================================
 # TAB 2: ASPIRATE
-# (No changes here, keeping code concise for display)
 # ==========================================
 with tab2:
     st.header("Bone Marrow Aspirate")
@@ -405,23 +590,24 @@ with tab2:
     col1, col2 = st.columns(2)
     with col1:
         st.subheader("Quality Assessment")
-        asp_status = st.radio("Overall Quality", ["Adequate quality for interpretation", "Suboptimal quality for interpretation"])
-        asp_reasons = st.multiselect("Quality Descriptors/Limitations", 
-            ["hemodiluted", "particulate", "clotted", "dry tap (punctio sicca)", "limited cellularity", "crush artifact"])
+        st.selectbox("Overall Quality", ["Adequate quality for interpretation", "Excellent quality for interpretation", "Suboptimal quality for interpretation"], key="asp_status", on_change=update_asp_text)
+        st.multiselect("Quality Descriptors/Limitations", 
+            ["hemodiluted", "particulate", "clotted", "dry tap (punctio sicca)", "limited cellularity", "crush artifact"],
+            key="asp_reasons", on_change=update_asp_text)
         
-        me_ratio = st.text_input("M:E Ratio", "2:1")
-        blast_pct = st.number_input("Marrow Blast %", 0, 100, 1, key="bm_blast_pct_input")
+        st.text_input("M:E Ratio", key="me_ratio", on_change=update_asp_text)
+        st.number_input("Marrow Blast %", 0, 100, key="bm_blast_pct", on_change=update_asp_text)
         
     with col2:
         st.subheader("Marrow Blast Morphology")
-        blast_desc = st.multiselect("Descriptors", 
+        st.multiselect("Descriptors", 
             ["high N:C ratio", "fine/dispersed chromatin", "prominent nucleoli", 
              "agranular cytoplasm", "moderate cytoplasm", "monoblastic morphology", 
-             "cytoplasmic vacuolization", "cup-like nuclei"])
-        if blast_pct > 0:
-            auer_rods = st.radio("Auer Rods (Marrow)", ["No Auer rods seen", "Auer rods identified"], key="bm_auer_input")
+             "cytoplasmic vacuolization", "cup-like nuclei"],
+            key="bm_blast_desc", on_change=update_asp_text)
+        if st.session_state.bm_blast_pct > 0:
+            st.radio("Auer Rods (Marrow)", ["No Auer rods seen", "Auer rods identified"], key="bm_auer", on_change=update_asp_text)
         else:
-            auer_rods = "No Auer rods seen"
             st.caption("Auer Rod status is included only if Blasts % > 0.")
     
     st.divider()
@@ -431,81 +617,108 @@ with tab2:
     
     with col3:
         st.subheader("Erythropoiesis")
-        ery_maturation = st.selectbox("Erythroid Maturation", 
+        st.selectbox("Erythroid Maturation", 
             ["shows full spectrum maturation with no dysplasia", 
              "shows full spectrum maturation", 
              "is left-shifted", 
-             "shows maturation arrest"])
-        ery_dysplasia = st.multiselect("Erythroid Dysplasia", 
+             "shows maturation arrest"],
+            key="ery_maturation", on_change=update_asp_text)
+        st.multiselect("Erythroid Dysplasia", 
             ["megaloblastoid change", "nuclear budding", "internuclear bridging", 
-             "karyorrhexis", "poor hemoglobinization", "vacuolization", "multinucleation"])
+             "karyorrhexis", "poor hemoglobinization", "vacuolization", "multinucleation"],
+            key="ery_dysplasia", on_change=update_asp_text)
         
     with col4:
         st.subheader("Granulopoiesis")
-        gran_maturation = st.selectbox("Granulocyte Maturation", 
+        st.selectbox("Granulocyte Maturation", 
             ["shows full spectrum maturation with no dysplasia",
              "shows sequential maturation to neutrophils", 
              "is left-shifted", 
-             "shows maturation arrest"])
-        gran_dysplasia = st.multiselect("Granulocyte Dysplasia", 
+             "shows maturation arrest"],
+            key="gran_maturation", on_change=update_asp_text)
+        st.multiselect("Granulocyte Dysplasia", 
             ["hypogranularity", "hyposegmentation (Pseudo-Pelger)", 
-             "abnormal chromatin clumping", "hypersegmentation", "nuclear projections", "giant bands"])
+             "abnormal chromatin clumping", "hypersegmentation", 
+             "Dohle bodies", "pseudo Chediak-Higashi granules"], # UPDATED
+            key="gran_dysplasia", on_change=update_asp_text)
             
     with col5:
         st.subheader("Megakaryocytes")
-        meg_number = st.select_slider("Quantity", ["Absent", "Decreased", "Normal", "Increased", "Markedly Increased"])
-        meg_morph = st.multiselect("Megakaryocyte Morphology", 
+        st.select_slider("Quantity", ["Absent", "Decreased", "Normal", "Increased", "Markedly Increased"], key="meg_number", on_change=update_asp_text)
+        st.multiselect("Megakaryocyte Morphology", 
             ["unremarkable with no dysplastic features",
              "pleomorphic", "large/hyperlobulated", "staghorn-like nuclei", 
-             "hypolobated forms", "micromegakaryocytes", "widely separated nuclear lobes"])
+             "hypolobated forms", "micromegakaryocytes", "widely separated nuclear lobes", "multinuclearity"], # UPDATED
+            key="meg_morph", on_change=update_asp_text)
 
     st.divider()
-    iron_stores = st.select_slider("Iron Stores", ["Absent", "Decreased", "Normal", "Increased"])
-    ring_sideroblasts = st.radio("Ring Sideroblasts", ["No ring sideroblasts seen", "Rare ring sideroblasts", "Ring sideroblasts present (>15%)"])
+    
+    # Plasma & Mast Cells (NEW)
+    col_pm1, col_pm2 = st.columns(2)
+    with col_pm1:
+        st.subheader("Plasma Cells")
+        st.multiselect("Plasma Cell Morphology", 
+            ["large bizarre plasma cells", "plasma cells with binucleation", "plasma cells with multinucleation", 
+             "large plasma cells", "medium sized plasma cells", "small plasma cells", "unremarkable"],
+            key="asp_plasma_morph", on_change=update_asp_text)
+            
+    with col_pm2:
+        st.subheader("Mast Cells")
+        st.selectbox("Mast Cells Status", ["No increase in mast cells", "Increased mast cells", "Spindle shaped mast cells"], key="asp_mast_cells", on_change=update_asp_text)
+
+    st.divider()
+    st.select_slider("Iron Stores", ["Absent", "Decreased", "Normal", "Increased"], key="iron_stores", on_change=update_asp_text)
+    st.radio("Ring Sideroblasts", ["No ring sideroblasts seen", "Rare ring sideroblasts", "Ring sideroblasts present (>15%)"], key="ring_sideroblasts", on_change=update_asp_text)
+
+    st.divider()
+    st.subheader("📝 Aspirate Report Draft (Editable)")
+    st.caption("This text updates automatically as you select options above. You can also edit it manually.")
+    st.text_area("Aspirate Section", key="asp_report_draft", height=200)
 
 # ==========================================
 # TAB 3: BIOPSY & IHC
-# (No changes here, keeping code concise for display)
 # ==========================================
 with tab3:
     st.header("Bone Marrow Biopsy")
     
-    bx_quality = st.selectbox("Biopsy Quality", 
-        ["adequate quality for interpretation", "fragmented", "suboptimal due to crush artifact", "uninterpretable"])
+    st.selectbox("Biopsy Quality", 
+        ["adequate quality for interpretation", "Excellent quality for interpretation", "fragmented", "suboptimal due to crush artifact", "uninterpretable"],
+        key="bx_quality", on_change=update_bx_text)
     
     col_b1, col_b2 = st.columns(2)
     
     with col_b1:
-        cellularity = st.slider("Cellularity (%)", 0, 100, 40, step=5)
-        
+        st.slider("Cellularity (%)", 0, 100, step=5, key="cellularity", on_change=update_bx_text)
         # Logic for Hyper/Hypo based on age
         expected = 100 - age
-        if cellularity > (expected + 15):
-            cell_status = "hypercellular"
-        elif cellularity < (expected - 15):
-            cell_status = "hypocellular"
+        if st.session_state.cellularity > (expected + 15):
+            c_status = "hypercellular"
+        elif st.session_state.cellularity < (expected - 15):
+            c_status = "hypocellular"
         else:
-            cell_status = "normocellular"
-            
-        st.info(f"Assessment: {cellularity}% is {cell_status} for age {age}.")
+            c_status = "normocellular"
+        st.info(f"Assessment: {st.session_state.cellularity}% is {c_status} for age {age}.")
     
     with col_b2:
-        # NEW Fibrosis/Streaming Section (Replaces WHO Grade)
         st.subheader("Reticulin Status")
-        streaming_status = st.radio("Streaming Assessment", 
+        st.radio("Streaming Assessment", 
             ["No obvious streaming to suggest fibrosis is present", 
-             "Streaming is present suggestive of fibrosis"])
+             "Streaming is present suggestive of fibrosis"],
+            key="streaming_status", on_change=update_bx_text)
 
     st.subheader("Architecture & Stromal Changes (Multi-select)")
     
-    # NEW Erythroid Island Section (moved before megakaryocyte dist)
-    erythroid_island_status = st.radio("Erythroid Island Distribution",
+    st.radio("Erythroid Island Distribution",
         ["Erythroid islands are prominent and numerous",
          "Occasional erythroid islands are noted",
          "Erythroid islands are present in expected numbers",
-         "Erythroid islands are reduced/absent"])
+         "Erythroid islands are reduced/absent"],
+        key="erythroid_island_status", on_change=update_bx_text)
+
+    # Granulocytes Section (NEW)
+    st.text_input("Granulocytes (Biopsy)", value="Granulocytes are well represented and show full spectrum maturation", key="bx_granulocytes", on_change=update_bx_text)
          
-    arch_features = st.multiselect("Select Features", 
+    st.multiselect("Select Features", 
         ["Bone marrow architecture is preserved and orderly", 
          "Trilineage hematopoiesis present", 
          "Erythroid predominance", 
@@ -515,167 +728,94 @@ with tab3:
          "Discrete blast clusters identified", 
          "No lymphoid aggregates are seen", 
          "Lymphoid aggregates are seen (usually mature)", 
-         "No non-hematopoietic elements present", # NEW
+         "No non-hematopoietic elements present", 
          "Dilated sinusoids", 
          "Stromal edema", 
          "Serous atrophy of fat", 
          "Granulomas"],
-        default=["Bone marrow architecture is preserved and orderly", "Trilineage hematopoiesis present", "No blast clusters are identified", "No lymphoid aggregates are seen", "No non-hematopoietic elements present"]
+        key="arch_features", on_change=update_bx_text
         )
     
     st.subheader("Megakaryocyte Distribution")
-    meg_dist = st.radio("Distribution Pattern", 
-        ["Randomly distributed", "Loose clustering", "Dense clustering (>6 cells)", "Paratrabecular location"])
+    st.radio("Distribution Pattern", 
+        ["Randomly distributed", "Loose clustering", "Dense clustering (>6 cells)", "Paratrabecular location"],
+        key="meg_dist", on_change=update_bx_text)
+
+    st.divider()
+    st.subheader("📝 Biopsy Report Draft (Editable)")
+    st.text_area("Biopsy Section", key="bx_report_draft", height=200)
 
     st.divider()
     st.header("Immunohistochemistry (IHC) Summary")
 
     st.subheader("IHC Markers Performed")
     ihc_markers_list = ["CD34", "CD3", "CD20", "CD117", "CD138", "Kappa light chain", "Lambda light chain", "CD42b", "Reticulin"]
-    ihc_markers_selected = st.multiselect("Select Markers Used", ihc_markers_list, default=["CD34", "CD3", "CD20"])
+    st.multiselect("Select Markers Used", ihc_markers_list, default=["CD34", "CD3", "CD20"], key="ihc_markers_selected")
     
-    default_ihc_text = """
-Immunohistochemical staining for CD34 highlights blasts which account for <X>% of the cellularity.
+    default_ihc_text = """Immunohistochemical staining for CD34 highlights blasts which account for <X>% of the cellularity.
 CD3 highlights T cells in a reactive distribution pattern.
 CD20 highlights interstitial B cells with no aggregates seen.
 CD117 highlights occasional mast cells (non-diagnostic).
 CD138 highlights scattered plasma cells (no significant increase).
-Kappa light chain and Lambda light chain are polytypic in distribution.
-"""
-    ihc_report_text = st.text_area("IHC Narrative (Edit as needed for selected markers)", default_ihc_text.strip(), height=250, key="ihc_report_text_input")
+Kappa light chain and Lambda light chain are polytypic in distribution."""
+    st.text_area("IHC Narrative (Edit as needed for selected markers)", value=default_ihc_text, height=250, key="ihc_report_draft")
 
 
 # ==========================================
 # TAB 4: ANCILLARY
-# (No changes here, keeping code concise for display)
 # ==========================================
 with tab4:
     st.header("Ancillary Studies")
-    flow_cyto_input = st.text_area("Flow Cytometry", "No increased blasts or aberrant populations detected.", key="flow_cyto_input")
-    cyto_input = st.text_area("Cytogenetics / FISH", "Pending.", key="cyto_input")
-    ngs_input = st.text_area("Molecular (NGS)", "Pending.", key="ngs_input")
+    st.text_area("Flow Cytometry", "No increased blasts or aberrant populations detected.", key="flow_cyto_input")
+    st.text_area("Cytogenetics / FISH", "Pending.", key="cyto_input")
+    st.text_area("Molecular (NGS)", "Pending.", key="ngs_input")
 
 # ==========================================
 # TAB 5: REPORT GENERATION
-# (Report assembly logic is here, but the code structure for assembly is omitted for conciseness)
 # ==========================================
 with tab5:
     st.header("Final Generated Report")
     st.success("Copy and paste the text below into your LIS.")
     
-    # --- PB CONSTRUCTION ---
-    neut_str = ", ".join(neut_morph) if neut_morph else "unremarkable"
-    plt_str = ", ".join(plt_morph) if plt_morph else "unremarkable"
-    
-    # NEW RBC Logic:
-    rbc_phrase = ""
-    if "unremarkable morphology" in rbc_morph and len(rbc_morph) <= 2 and ("normochromic" in rbc_morph or "normocytic" in rbc_morph or len(rbc_morph) == 1):
-        rbc_phrase = "have unremarkable morphology"
-    elif "non-specific morphology" in rbc_morph:
-        rbc_phrase = "show non-specific morphology"
-    elif rbc_morph:
-        filtered_morph = [m for m in rbc_morph if m not in ["unremarkable morphology", "non-specific morphology"]]
-        if filtered_morph:
-            rbc_phrase = f"are {', '.join(filtered_morph)}"
-        else:
-            rbc_phrase = "have unremarkable morphology"
-    else:
-        rbc_phrase = "have unremarkable morphology"
-        
-    if pb_blast_pct > 0:
-        pb_desc_str = ", ".join(pb_blast_desc) if pb_blast_desc else "unremarkable morphology"
-        pb_blast_text = f"Blasts account for {pb_blast_pct}% of leukocytes. They exhibit {pb_desc_str}. {pb_auer}."
-    else:
-        pb_blast_text = "No blasts are identified."
-
-    pb_report = f"""
-PERIPHERAL BLOOD:
-Red blood cells {rbc_phrase}.
-Neutrophils are {neut_str}.
-Platelets are {plt_str}.
-{pb_blast_text}
-    """
-    
-    # --- BIOPSY CONSTRUCTION ---
-    arch_text_statements = [f"{item}." for item in arch_features] if arch_features else ["Bone marrow architecture is preserved."]
-    arch_text = "\n".join(arch_text_statements)
-    
-    biopsy_text = f"""
-BONE MARROW BIOPSY:
-The bone marrow biopsy is of {bx_quality}.
-The cellularity is approximately {cellularity}%, which is {cell_status} for age.
-{arch_text}
-{erythroid_island_status}.
-{streaming_status}.
-Megakaryocytes are {meg_dist.lower()}.
-Trabecular bone is unremarkable.
-    """
-
-    # --- ASPIRATE CONSTRUCTION ---
-    if asp_reasons:
-        quality_str = f"{asp_status}, {', '.join(asp_reasons)}"
-    else:
-        quality_str = asp_status
-
-    blast_full_str = f"Blasts account for {blast_pct}% of the differential count."
-    if blast_pct > 0:
-        blast_desc_text = ", ".join(blast_desc) if blast_desc else "unremarkable morphology"
-        blast_full_str += f" The blasts exhibit {blast_desc_text}. {auer_rods}."
-    else:
-        blast_full_str = "No blasts are identified."
-
-    ery_dys_text = f" Dysplastic features include {', '.join(ery_dysplasia)}." if ery_dysplasia else ""
-    gran_dys_text = f" Dysplastic features include {', '.join(gran_dysplasia)}." if gran_dysplasia else ""
-    meg_morph_str = ", ".join(meg_morph) if meg_morph else "unremarkable morphology"
-
-    aspirate_text = f"""
-BONE MARROW ASPIRATE:
-The bone marrow aspirate is of {quality_str}.
-The myeloid-to-erythroid (M:E) ratio is {me_ratio}.
-{blast_full_str}
-Erythropoiesis {ery_maturation}.{ery_dys_text}
-Granulopoiesis {gran_maturation}.{gran_dys_text}
-Megakaryocytes are {meg_number.lower()} and display {meg_morph_str}.
-Iron staining shows {iron_stores.lower()} iron stores.
-{ring_sideroblasts}.
-    """
-    
-    # --- IHC CONSTRUCTION ---
-    ihc_section = ""
-    if ihc_report_text.strip():
-        ihc_section = f"""
-IMMUNOHISTOCHEMISTRY (IHC):
-{ihc_report_text}
-"""
-
-    # --- DX TEMPLATE ---
+    # --- DX TEMPLATE LOGIC ---
+    # We calculate this on the fly based on current state
     dx_suggestion = "BONE MARROW, ASPIRATE AND BIOPSY:"
-    if blast_pct >= 20:
+    if st.session_state.bm_blast_pct >= 20:
         dx_suggestion += "\n- ACUTE LEUKEMIA (See Comment)"
-    elif blast_pct >= 10:
+    elif st.session_state.bm_blast_pct >= 10:
          dx_suggestion += "\n- MDS/AML (10-19% blasts) or HIGH GRADE MDS (See Comment)"
-    elif "staghorn-like nuclei" in meg_morph:
+    elif "staghorn-like nuclei" in st.session_state.meg_morph:
         dx_suggestion += "\n- MYELOPROLIFERATIVE NEOPLASM (See Comment)"
-    elif len(ery_dysplasia) > 0 or len(gran_dysplasia) > 0:
+    elif len(st.session_state.ery_dysplasia) > 0 or len(st.session_state.gran_dysplasia) > 0:
         dx_suggestion += "\n- MYELODYSPLASTIC NEOPLASM (MDS) (See Comment)"
     else:
         dx_suggestion += "\n- NO DIAGNOSTIC ABNORMALITY RECOGNIZED"
+    
+    # Combine edits from previous tabs
+    ihc_section = ""
+    if st.session_state.ihc_report_draft.strip():
+        ihc_section = f"\nIMMUNOHISTOCHEMISTRY (IHC):\n{st.session_state.ihc_report_draft}\n"
 
-    # --- FULL ASSEMBLY ---
     full_report = f"""
 {dx_suggestion}
 
 CLINICAL HISTORY:
 {age}-year-old. {cbc_summary}
-{pb_report}
-{biopsy_text}
-{aspirate_text}
+
+PERIPHERAL BLOOD:
+{st.session_state.pb_report_draft}
+
+BONE MARROW BIOPSY:
+{st.session_state.bx_report_draft}
+
+BONE MARROW ASPIRATE:
+{st.session_state.asp_report_draft}
 
 ANCILLARY STUDIES:
 {ihc_section}
-Flow Cytometry: {flow_cyto_input}
-Cytogenetics: {cyto_input}
-Molecular (NGS): {ngs_input}
+Flow Cytometry: {st.session_state.flow_cyto_input}
+Cytogenetics: {st.session_state.cyto_input}
+Molecular (NGS): {st.session_state.ngs_input}
     """
     
     st.text_area("Final Report", value=full_report, height=800)
@@ -684,14 +824,13 @@ Molecular (NGS): {ngs_input}
     st.divider()
     if st.button("💾 Save Final Report to My Notes"):
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        report_title = f"\n\n--- SAVED REPORT (Accession: {accession if accession else 'N/A'}, {age}y, {blast_pct}% BM Blasts) - {timestamp} ---\n"
+        report_title = f"\n\n--- SAVED REPORT (Accession: {accession if accession else 'N/A'}, {age}y, {st.session_state.bm_blast_pct}% BM Blasts) - {timestamp} ---\n"
         
         st.session_state['saved_reports'] += report_title + full_report
         st.success("Report successfully saved to 'My Notes' tab.")
 
 # ==========================================
 # TAB 6: MY NOTES / ARCHIVE
-# (No changes here, keeping code concise for display)
 # ==========================================
 with tab6:
     st.header("My Reference Notes")
@@ -708,26 +847,24 @@ with tab6:
     
     if st.button("Clear Archived Reports"):
         st.session_state['saved_reports'] = ""
-        st.experimental_rerun()
+        st.rerun()
 
 
 # ==========================================
-# TAB 7: HEME CLASSIFICATION REFS (UPDATED)
+# TAB 7: HEME CLASSIFICATION REFS
 # ==========================================
 with tab7:
     st.header("Heme Classification Reference Library")
     
     search_term = st.text_input("Search Database (e.g., 'CMML', 'SF3B1', '10%')")
 
-    # --- WHO 5th EDITION SECTION (NEW & COMPREHENSIVE) ---
-    st.subheader("🧬 WHO 5th Edition: Myeloid & Histiocytic/Dendritic Neoplasms (Comprehensive)")
-    st.markdown("*A non-summarized, exhaustive listing of diagnostic categories and entities.*")
+    # --- WHO 5th EDITION SECTION ---
+    st.subheader("🧬 WHO 5th Edition: Myeloid & Histiocytic/Dendritic Neoplasms")
     
     for category, entities in WHO5_DATA.items():
         # Search filter check for category
         if search_term and search_term.lower() not in category.lower():
             entity_match = False
-            # Handles both dict and list values in WHO5_DATA
             for ename, edata in (entities.items() if isinstance(entities, dict) else {k: k for k in entities}.items()):
                 if search_term.lower() in ename.lower() or str(edata).lower().find(search_term.lower()) != -1:
                     entity_match = True
@@ -736,10 +873,8 @@ with tab7:
                 continue
 
         with st.expander(category, expanded=True if search_term else False):
-            # Handles both dict and list values in WHO5_DATA
             if isinstance(entities, dict):
                 for entity_name, details in entities.items():
-                    # Search filter check for entity
                     if search_term and search_term.lower() not in entity_name.lower() and str(details).lower().find(search_term.lower()) == -1:
                         continue
                         
@@ -752,7 +887,6 @@ with tab7:
                     st.markdown("---")
             elif isinstance(entities, list):
                 for item in entities:
-                    # Search filter check for list item
                     if search_term and search_term.lower() not in item.lower():
                         continue
                     st.markdown(f"- {item}")
@@ -760,9 +894,8 @@ with tab7:
 
     st.markdown("---")
 
-    # --- ICC 2022 SECTION (UPDATED) ---
-    st.subheader("🔬 ICC 2022 Reference Library (Myeloid/MDS/MPN/Plasma Cell)")
-    st.markdown("*The revised, detailed International Consensus Classification criteria.*")
+    # --- ICC 2022 SECTION ---
+    st.subheader("🔬 ICC 2022 Reference Library")
 
     for category, entities in ICC_DATA.items():
         if search_term:
